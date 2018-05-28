@@ -56,7 +56,7 @@ class RobotOrchestrator:
                 if self.serverComm.controlServerEventPipe.poll() == True:
                     self.robotModulePlugin.sendEvent(self.serverComm.controlServerEventPipe.recv())
                 for message in self.robotModulePlugin.getMessagesToSend():
-                    self.serverComm.chatServerOutboundPipe.send(message)
+                    self.serverComm.chatServerOutPipe.send(message)
                 counter = counter + 1
         except KeyboardInterrupt:
             #Someone pressed ctrl-c. Shut down everything

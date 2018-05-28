@@ -63,7 +63,7 @@ class robotModuleProcessHandler(object):
         for process in self.processArray:
             if process['process'].is_alive():
                 if process['chatOutPipe'].poll() == True:
-                    messages.append(process[chatOutPipe].recv())
+                    messages.append(process['chatOutPipe'].recv())
         return messages
     
     
@@ -91,6 +91,7 @@ class robotModuleProcess(object):
     def beginProcess(self):
         self._setupLogger()
         self.robotModule.passLogger(self.logger)
+        self.robotModule.passChatOutputPipe(self.chatOutPipe)
         shutdown = False
         try:
             while(shutdown == False):

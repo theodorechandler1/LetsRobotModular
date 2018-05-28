@@ -2,7 +2,7 @@
 #DO NOT MODIFY THIS FILE
 class robotModule(object):
     def __init__(self):
-        #self.chatOutPipe = chatOutPipe
+        self.chatOutPipe = None
         self.logger = None
         pass
     
@@ -29,3 +29,6 @@ class robotModule(object):
         
     def passLogger(self, logger):
         self.logger = logger
+    
+    def passChatOutputPipe(self, chatOutPipe):
+        self.chatOutPipe = chatOutPipe
