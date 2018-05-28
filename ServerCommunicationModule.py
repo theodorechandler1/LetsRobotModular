@@ -323,8 +323,11 @@ class ChatServerInbound(object):
     
     def _handleChatMessage(self, *args):
         #Send it upstream to let the orchestrator pass the message out
-        self.logger.debug("Chat Message User: {} sent: {}".format(args[0]['name'],args[0]['message']))
-        self.chatEventPipe.send(*args)
+        try:
+            self.logger.debug("Chat Message User: {} sent: {}".format(args[0]['name'],args[0]['message']))
+            self.chatEventPipe.send(*args)
+        except UnicodeEncodeError:
+            self.logger.warning("Chat Message Error. Someone Sent a non ascii message in chat or has a non ascii username")
 
 class AppServerListener(object):
     
