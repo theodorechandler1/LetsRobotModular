@@ -1,25 +1,21 @@
-import tempfile
 import os
 import uuid
 import thread
 from robotModule import robotModule
-import platform
-
+from io import BytesIO #For handling the mp3 in memory
+from gtts import gTTS #'pip install gTTS' and 'pip install urllib3'
+import pygame #pip install pygame
+#also requires 'sudo apt-get install python-dev libsdl-image1.2-dev libsdl-mixer1.2-dev libsdl-ttf2.0-dev   libsdl1.2-dev libsmpeg-dev python-numpy subversion libportmidi-dev ffmpeg libswscale-dev libavformat-dev libavcodec-dev' on raspberry pi
+#Way too many dependencies on raspberry pi. May look at other mp3 player libraries later
 class ChatModule(robotModule):
     
-    def __init__(self, voice = "male", voiceNo = 1):
+    def __init__(self):
         super(ChatModule, self).__init__()
-        self.tempDir = tempfile.gettempdir()
-        print("Temporary directory: {}".format(self.tempDir))
-        self.voice = voice
-        self.voiceNo = voiceNo
-        self.hardwareNumber = 0
-        self.__findHardwareNo__()
         self.userDict = {}
     
     def chatHandler(self, args):
         super(ChatModule, self).chatHandler()
-        print("Chat Module is handling chat message")
+        self.logger.debug("Chat Module is handling chat message")
         message = args['message']
         user = args['name']
         msgWithoutRobotName = message.split(']')[1:]
@@ -35,12 +31,7 @@ class ChatModule(robotModule):
             self.handleChatMessage(msgWithoutRobotName, user)
 
     def handleChatMessage(self, message, user):
-            #Custom Voice Check
-            if user in self.userDict:
-                print("Found user in dictionary")
-                thread.start_new_thread(self.say, (message, self.userDict[user]['voice'], self.userDict[user]['voiceNo']))
-            else:
-                thread.start_new_thread(self.say, (message,))
+        thread.start_new_thread(self.say, (message,))
     
     def handleCommand(self, command, user):
         if user not in self.userDict:
@@ -72,36 +63,41 @@ class ChatModule(robotModule):
     def removeBannedWords(self, message):
         message.toUpper().replace('lex', '')
         
-    def say(self, message, voice = None, voiceNo = None):
-        if voice is None:
-            voice = self.voice
-        if voiceNo is None:
-            voiceNo = self.voiceNo
+    def replaceWords(self, message):
+        message = message.lower()
+        message = message.replace('cat','feline')
+        message = message.replace('dog','another cat')
+        message = message.replace('vvvv','i am a monster truck')
+        message = message.replace('wwww','i am a monster truck')
+        message = message.replace('kitty','zoe')
+        message = message.replace('destroy','construct')
+        message = message.replace('kill','pet')
+        message = message.replace('fuck','windows 95')
+        return message
         
-        tempFilePath = os.path.join(self.tempDir, "text_" + str(uuid.uuid4()))
-        f = open(tempFilePath, "w")
-        f.write(message)
-        f.close()
-        # espeak tts
-        if voice == "male":
-            result = os.system('cat ' + tempFilePath + ' | espeak --stdout | aplay -D plughw:%d,0' % self.hardwareNumber)
-        else:
-            result = os.system('cat ' + tempFilePath + ' | espeak -ven-us+f%d -s170 --stdout | aplay -D plughw:%d,0' % (voiceNo, self.hardwareNumber))
-        os.remove(tempFilePath)
-        return result
         
-    def __findHardwareNo__(self):
-        if 'windows' not in platform.system().lower():
-            for hardwareNumber in (2, 0, 3, 1, 4):
-                self.hardwareNumber = hardwareNumber
-                result = self.say(" ")
-                if result == 0:
-                    print("Found hardware number {}".format(hardwareNumber))
-                    self.hardwareNumber = hardwareNumber
-                    break
+    def say(self, message):
+        try:
+            self.logger.info("Chat message {}".format(message))
+            pygame.init()
+            message = self.replaceWords(message)
+            message.encode('ascii')
+            tts = gTTS(message)
+            mp3FileDes = BytesIO()
+            tts.write_to_fp(mp3FileDes)
+            mp3FileDes.seek(0)
+            pygame.mixer.music.load(mp3FileDes)
+            pygame.mixer.music.play()
+            while pygame.mixer.music.get_busy(): 
+                pygame.time.Clock().tick(10)
+            self.logger.debug("Finished playing chat message")
+        except UnicodeEncodeError:
+            self.logger.debug("Message: {} contains non ascii characters".format(message))
+        except Exception:
+            self.logger.warning("Chat crash occurred.")
 
 if __name__ == '__main__':
-    m = ChatModule(voice = "Female", voiceNo = 3)
+    m = ChatModule()
     m.say('Test')
     m.say('This is a test')
     m.say('This is a test of the emergency alert system')

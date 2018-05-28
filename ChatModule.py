@@ -1,21 +1,32 @@
+import tempfile
 import os
 import uuid
 import thread
 from robotModule import robotModule
-from io import BytesIO #For handling the mp3 in memory
-from gtts import gTTS #'pip install gTTS' and 'pip install urllib3'
-import pygame #pip install pygame
-#also requires 'sudo apt-get install python-dev libsdl-image1.2-dev libsdl-mixer1.2-dev libsdl-ttf2.0-dev   libsdl1.2-dev libsmpeg-dev python-numpy subversion libportmidi-dev ffmpeg libswscale-dev libavformat-dev libavcodec-dev' on raspberry pi
-#Way too many dependencies on raspberry pi. May look at other mp3 player libraries later
+import platform
+import time
+from random import randint
+
+#Helpful espeak options found on https://delightlylinux.wordpress.com/2015/03/23/linux-has-voice-with-espeak/
+
 class ChatModule(robotModule):
     
     def __init__(self):
         super(ChatModule, self).__init__()
+        self.tempDir = tempfile.gettempdir()
+        #print("Temporary directory: {}".format(self.tempDir))
+        self.defaultVoice = "en" #Which voice to use
+        self.defaultSpeed = 160 #How fast the text is read
+        self.voiceMinSpeed = 10
+        self.voiceMaxSpeed = 250
+        self.userDefaults = {'voice' : self.defaultVoice, 'speed' : self.defaultSpeed}
+        self.hardwareNumber = 0
+        #self.__findHardwareNo__()
         self.userDict = {}
+        self.availableVoices = ['de', 'default', 'en', 'en-us', 'es-la', 'fr', 'pt', 'croak', 'f1', 'f2', 'f3', 'f4', 'f5', 'klatt', 'klatt2', 'klatt3', 'klatt4', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'whisper', 'whisperf']
     
     def chatHandler(self, args):
         super(ChatModule, self).chatHandler()
-        self.logger.debug("Chat Module is handling chat message")
         message = args['message']
         user = args['name']
         msgWithoutRobotName = message.split(']')[1:]
@@ -25,77 +36,112 @@ class ChatModule(robotModule):
             msgWithoutRobotName = ''
         msgWithoutRobotName = msgWithoutRobotName.strip()
         #Command Check
-        if msgWithoutRobotName.startswith('.'):
+        if msgWithoutRobotName.startswith('!'):
             self.handleCommand(msgWithoutRobotName, user)
-        else:
+        elif msgWithoutRobotName.startswith('.'): #Not a message to speak
+            pass
+        else: #Not a command. Say it.
             self.handleChatMessage(msgWithoutRobotName, user)
 
     def handleChatMessage(self, message, user):
-        thread.start_new_thread(self.say, (message,))
+        #Custom Voice Check
+        if user in self.userDict:
+            thread.start_new_thread(self.say, (message, self.userDict[user]['voice'], self.userDict[user]['speed']))
+        else:
+            thread.start_new_thread(self.say, (message,))
     
     def handleCommand(self, command, user):
+        if user == 'trc202':
+            time.sleep(1)
+        #First we make sure the user has a reference in the dictionary
         if user not in self.userDict:
-            self.userDict[user] = {'voice' : 'Male', 'voiceNo' : 1}
-        #Get rid of the period
-        command = command[1:]
-        if len(command) > 1:
-            command = command.lower()
-            command = command.split()
-            #If the command is at least elements long and the first one starts with voice
-            if len(command) >= 2 and command[0] == 'voice':
-                if command[1] == 'female':
-                    self.userDict[user]['voice'] = 'female'
-                elif command[1] == 'male':
-                    self.userDict[user]['voice'] = 'male'
-                else:
-                    if len(command) == 3 and command[1] == 'number':
-                        self.userDict[user]['voiceNo'] = int(command[2])
-                    pass
-            elif user == 'trc202' and command[0] == 'shutdown':
-                self.say('Shutting down in 10 seconds')
-                os.system('sudo shutdown -h 10')
-            elif user == 'trc202' and command[0] == 'reboot':
-                self.say('Rebooting now')
-                os.system('sudo reboot')
-            else:
-                pass
-            
-    def removeBannedWords(self, message):
-        message.toUpper().replace('lex', '')
-        
-    def replaceWords(self, message):
-        message = message.lower()
-        message = message.replace('cat','feline')
-        message = message.replace('dog','another cat')
-        message = message.replace('vvvv','i am a monster truck')
-        message = message.replace('wwww','i am a monster truck')
-        message = message.replace('kitty','zoe')
-        message = message.replace('destroy','construct')
-        message = message.replace('kill','pet')
-        message = message.replace('fuck','windows 95')
-        return message
-        
-        
-    def say(self, message):
+            self.userDict[user] = self.userDefaults
+        #Now we can handle the command
+        commandWords = command.split(' ')
         try:
-            self.logger.info("Chat message {}".format(message))
-            pygame.init()
-            message = self.replaceWords(message)
-            message.encode('ascii')
-            tts = gTTS(message)
-            mp3FileDes = BytesIO()
-            tts.write_to_fp(mp3FileDes)
-            mp3FileDes.seek(0)
-            pygame.mixer.music.load(mp3FileDes)
-            pygame.mixer.music.play()
-            while pygame.mixer.music.get_busy(): 
-                pygame.time.Clock().tick(10)
-            self.logger.debug("Finished playing chat message")
-        except UnicodeEncodeError:
-            self.logger.debug("Message: {} contains non ascii characters".format(message))
-        except Exception:
-            self.logger.warning("Chat crash occurred.")
+            if commandWords[0] == '!help':
+                self.sendCommandList()
+            elif commandWords[0] == '!voice':
+                self.handleVoiceCommand(commandWords, user)
+            elif commandWords[0] == '!fortune':
+                print("sending fortune")
+                self.sendMessage(os.popen('fortune').read())
+            else:
+                self.sendCommandList()
+        except:
+            self.sendCommandList()
+        print(command)
+    
+    def getVoiceString(self, user):
+        userValues = None
+        if user not in self.userDict:
+            userValues = self.userDefaults
+        else:
+            userValues = self.userDict[user]
+        return "User: {} has voice: {} with speed: {}".format(user,userValues['voice'],userValues['speed'])
+        
+    def handleVoiceCommand(self, commandWords, user):
+        if len(commandWords) == 1:
+            self.sendMessage(self.getVoiceString(user))
+        elif commandWords[1] == 'speed':
+            speed = int(commandWords[2])
+            if(self.voiceMinSpeed <= speed <= self.voiceMaxSpeed): #Make sure the user selected a value between the min and max
+                self.userDict[user]['speed'] = speed
+                self.sendMessage("User: {} has set speed: {}".format(user, speed))
+        elif commandWords[1] == 'list':
+            self.sendMessage(str(self.availableVoices))
+        elif commandWords[1] == 'set' and commandWords[2] in self.availableVoices:
+            self.userDict[user]['voice'] = commandWords[2]
+            self.sendMessage("User: {} has set voice: {}".format(user,self.userDict[user]['voice']))
+        elif commandWords[1] == 'add' and commandWords[2] in self.availableVoices:
+            self.userDict[user]['voice'] = self.userDict[user]['voice'] + "+" + commandWords[2]
+            self.sendMessage("User: {} has set voice: {}".format(user,self.userDict[user]['voice']))
+        elif commandWords[1] == 'random':
+            self.userDict[user]['voice'] = self.availableVoices[randint(0,len(self.availableVoices))]
+            self.sendMessage("User: {} has set voice: {}".format(user,self.userDict[user]['voice']))
+        else:
+            self.sendCommandList()
+    
+    def sendCommandList(self):
+        commands = ""
+        commands += "!help - this command"
+        commands += "!voice - lists current voice"
+        commands += "!voice speed <{}-{}>- sets voice speed".format(self.voiceMinSpeed, self.voiceMaxSpeed)
+        commands += "!voice list - Lists the available voices"
+        commands += "!voice set <voice> - Sets the user voice from voice list"
+        commands += "!voice add <voice> - Adds an additional voice from the list"
+        commands += "!voice random - Sets a random voice"
+        commands += "!fortune - Get a random fortune"
+        self.sendMessage(commands)
+        
+    def say(self, message, voice = None, speed = None):
+        if voice is None:
+            voice = self.defaultVoice
+        if speed is None:
+            speed = self.defaultSpeed
+        
+        tempFilePath = os.path.join(self.tempDir, "text_" + str(uuid.uuid4()))
+        f = open(tempFilePath, "w")
+        f.write(message)
+        f.close()
+        # espeak tts
+        command = "espeak -s {} -v {} -f {} >/dev/null 2>&1".format(speed,voice,tempFilePath)
+        result = os.system(command)
+        os.remove(tempFilePath)
+        return result
 
+    def sendMessage(self, message):
+        maxMessageLength = 128
+        if len(message) > maxMessageLength: #Make sure we don't lose any data by exceeding the max message length
+            splitLocation = message.rfind(' ', 0, maxMessageLength) #Find the nearest space to split on
+            if (splitLocation == -1): #Couldn't find a space (This should never happen)
+                splitLocation = maxMessageLength
+            #Yay, recursion to save the day!
+            self.sendMessage(message[:splitLocation])
+            self.sendMessage(message[splitLocation:])
+        else:
+            super(ChatModule, self).sendMessage("[AutoMod] .{}".format(message))
+    
 if __name__ == '__main__':
     m = ChatModule()
     m.say('Test')
