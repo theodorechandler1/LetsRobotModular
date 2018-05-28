@@ -24,7 +24,7 @@ class ChatModule(robotModule):
         self.voiceMaxSpeed = 250
         self.userDefaults = {'voice' : self.defaultVoice, 'speed' : self.defaultSpeed, 'pitch' : self.defaultPitch}
         self.hardwareNumber = 0
-        #self.__findHardwareNo__()
+        self.__findHardwareNo__()
         self.userDict = {}
         self.availableVoices = ['de', 'default', 'en', 'en-us', 'es-la', 'fr', 'pt', 'croak', 'f1', 'f2', 'f3', 'f4', 'f5', 'klatt', 'klatt2', 'klatt3', 'klatt4', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'whisper', 'whisperf']
     
@@ -51,6 +51,7 @@ class ChatModule(robotModule):
         if user in self.userDict:
             thread.start_new_thread(self.say, (message, self.userDict[user]['voice'], self.userDict[user]['speed'], self.userDict[user]['pitch']))
         else:
+            self.getRandomVoice(user)
             thread.start_new_thread(self.say, (message,))
     
     def handleCommand(self, command, user):
@@ -79,6 +80,16 @@ class ChatModule(robotModule):
         except:
             self.sendCommandList()
         print(command)
+    
+    def getRandomVoice(self, user):
+        if user not in self.userDict:
+            self.userDict[user] = self.userDefaults.copy()
+        self.userDict[user]['voice'] = self.availableVoices[randint(0,len(self.availableVoices))]
+        self.userDict[user]['speed'] = randint(self.voiceMinSpeed, self.voiceMaxSpeed)
+        self.userDict[user]['pitch'] = randint(self.voiceMinPitch, self.voiceMaxPitch)
+        if(randint(0,1) == 1):
+            self.userDict[user]['voice'] = self.userDict[user]['voice'] + '+' + self.availableVoices[randint(0,len(self.availableVoices))]
+        
     
     def getVoiceString(self, user):
         userValues = None
@@ -114,10 +125,11 @@ class ChatModule(robotModule):
             self.userDict[user]['voice'] = self.userDict[user]['voice'] + "+" + commandWords[2]
             self.sendMessage("User: {} has set voice: {}".format(user,self.userDict[user]['voice']))
         elif commandWords[1] == 'random':
-            self.userDict[user]['voice'] = self.availableVoices[randint(0,len(self.availableVoices))]
-            self.sendMessage("User: {} has set voice: {}".format(user,self.userDict[user]['voice']))
+            self.getRandomVoice(user)
+            self.sendMessage(self.getVoiceString(user))
         else:
             self.sendCommandList()
+    
     
     def sendCommandList(self):
         commands = ""
@@ -145,7 +157,7 @@ class ChatModule(robotModule):
         f.write(message)
         f.close()
         # espeak tts
-        command = "espeak -s {} -v {} -p {} -f {}  >/dev/null 2>&1".format(speed, voice, pitch, tempFilePath)
+        command = "espeak -s {} -v {} -p {} -f {} --stdout | aplay -D plughw:{},0".format(speed, voice, pitch, tempFilePath, self.hardwareNumber)
         result = os.system(command)
         os.remove(tempFilePath)
         return result
@@ -161,6 +173,16 @@ class ChatModule(robotModule):
             self.sendMessage(message[splitLocation:])
         else:
             super(ChatModule, self).sendMessage("[AutoMod] .{}".format(message))
+    
+    def __findHardwareNo__(self):
+        if 'windows' not in platform.system().lower():
+            for hardwareNumber in range(5):
+                self.hardwareNumber = hardwareNumber
+                result = self.say(" ")
+                if result == 0:
+                    print("Found hardware number {}".format(hardwareNumber))
+                    self.hardwareNumber = hardwareNumber
+                    break
     
 if __name__ == '__main__':
     m = ChatModule()
