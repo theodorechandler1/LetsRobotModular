@@ -49,7 +49,6 @@ class RobotOrchestrator:
             self.robotModulePlugin = robotModuleProcessHandler(self.config)
             self.robotModulePlugin.createProcesses()
             
-            counter = 1
             while True:
                 if self.serverComm.chatServerEventPipe.poll() == True:
                     self.robotModulePlugin.sendChatEvent(self.serverComm.chatServerEventPipe.recv())
@@ -57,7 +56,7 @@ class RobotOrchestrator:
                     self.robotModulePlugin.sendEvent(self.serverComm.controlServerEventPipe.recv())
                 for message in self.robotModulePlugin.getMessagesToSend():
                     self.serverComm.chatServerOutPipe.send(message)
-                counter = counter + 1
+                time.sleep(0.01)
         except KeyboardInterrupt:
             #Someone pressed ctrl-c. Shut down everything
             self.logger.info("KeyboardInterrupt. Shutting down all processes")
