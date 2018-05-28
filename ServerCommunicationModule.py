@@ -3,6 +3,7 @@ from multiprocessing import Process, Pipe
 import urllib2, requests, ssl, traceback, time
 import json
 import logging, logging.handlers
+from datetime import datetime
 
 class ServerCommunicationModule:
     
@@ -222,15 +223,19 @@ class ChatServerOutbound(object):
             self.chatSocket.on('connect', self._handleConnect)
             self.chatSocket.on('reconnect', self._handleConnect)
             self.chatSocket.on('disconnect', self._handleChatDisconnect)
+            lastCommandTime = datetime.now()
             shutdown = False
-            self._sendChatToServer({"message":"letsrobot.tv","robot_id":self.robotID,"room":self.chatRoom,"secret":self.chatSecret})
+            #self._sendChatToServer({"message":"[Test] letsrobot.tv","robot_id":self.robotID,"room":self.chatRoom,"secret":self.chatSecret})
             while shutdown == False:
                 time.sleep(0.01)
                 if self.shutdownPipe.poll() == True:
                     shutdown = True
                     self.logger.debug("Received shutdown command")
-                elif self.chatEventPipe.poll() == True:
-                    self._sendChatToServer({"message":self.chatEventPipe.recv(),"robot_id":self.robotID,"room":self.chatRoom,"secret":self.chatSecret})
+                elif self.chatEventPipe.poll() == True and ((datetime.now() - lastCommandTime).seconds > 1): #Check to see if we have something to send and that at least one second has passed since the last message
+                    chatToSend = self.chatEventPipe.recv()
+                    self.logger.debug("Sending: {} to server".format(chatToSend))
+                    self._sendChatToServer({"message":"{}".format(chatToSend),"robot_id":self.robotID,"room":self.chatRoom,"secret":self.chatSecret})
+                    lastCommandTime = datetime.now()
                 else:
                     pass
         except KeyboardInterrupt:
