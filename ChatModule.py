@@ -18,10 +18,10 @@ class ChatModule(robotModule):
         self.defaultVoice = "en" #Which voice to use
         self.defaultSpeed = 160 #How fast the text is read
         self.defaultPitch = 50
-        self.voiceMinPitch = 10
-        self.voiceMaxPitch = 200
-        self.voiceMinSpeed = 10
-        self.voiceMaxSpeed = 250
+        self.voiceMinPitch = 1
+        self.voiceMaxPitch = 300
+        self.voiceMinSpeed = 1
+        self.voiceMaxSpeed = 300
         self.userDefaults = {'voice' : self.defaultVoice, 'speed' : self.defaultSpeed, 'pitch' : self.defaultPitch}
         self.hardwareNumber = 0
         self.__findHardwareNo__()
@@ -47,13 +47,17 @@ class ChatModule(robotModule):
             self.handleChatMessage(msgWithoutRobotName, user)
 
     def handleChatMessage(self, message, user):
+        if user not in self.userDict:
+            self.getRandomVoice(user)
+        thread.start_new_thread(self.say, (message, self.userDict[user]['voice'], self.userDict[user]['speed'], self.userDict[user]['pitch']))
         #Custom Voice Check
-        if user in self.userDict:
+        '''if user in self.userDict:
             thread.start_new_thread(self.say, (message, self.userDict[user]['voice'], self.userDict[user]['speed'], self.userDict[user]['pitch']))
         else:
             self.getRandomVoice(user)
             thread.start_new_thread(self.say, (message,))
-    
+        '''
+        
     def handleCommand(self, command, user):
         if user == 'trc202':
             time.sleep(1)
@@ -65,8 +69,9 @@ class ChatModule(robotModule):
         try:
             if commandWords[0] == '!override' and user == 'trc202':
                 user = commandWords[1]
-                commandWords = commandWords[2:]
                 print commandWords
+                self.handleCommand(' '.join(commandWords[2:]), user)
+                return
             if commandWords[0] == '!help':
                 self.sendCommandList()
             elif commandWords[0] == '!voice':
@@ -75,10 +80,14 @@ class ChatModule(robotModule):
                 fortune = os.popen('fortune').read()
                 self.sendMessage(fortune)
                 self.handleChatMessage(fortune,'AutoMod')
+            elif commandWords[0] == '!volume':
+                volumeLevel = int(commandWords[1])
+                if(0 <= volumeLevel <= 100):
+                    os.system("amixer sset 'PCM' {}%".format(volumeLevel)) #Run amixer w/o arguments to figure out what should be there instead of 'PCM'
             else:
                 self.sendCommandList()
         except:
-            self.sendCommandList()
+            pass
         print(command)
     
     def getRandomVoice(self, user):
@@ -122,7 +131,7 @@ class ChatModule(robotModule):
             self.userDict[user]['voice'] = commandWords[2]
             self.sendMessage("User: {} has set voice: {}".format(user,self.userDict[user]['voice']))
         elif commandWords[1] == 'add' and commandWords[2] in self.availableVoices:
-            self.userDict[user]['voice'] = self.userDict[user]['voice'] + "+" + commandWords[2]
+            self.userDict[user]['voice'] = self.userDict[user]['voice'].split('+')[0] + "+" + commandWords[2]
             self.sendMessage("User: {} has set voice: {}".format(user,self.userDict[user]['voice']))
         elif commandWords[1] == 'random':
             self.getRandomVoice(user)
@@ -157,7 +166,7 @@ class ChatModule(robotModule):
         f.write(message)
         f.close()
         # espeak tts
-        command = "espeak -s {} -v {} -p {} -f {} --stdout | aplay -D plughw:{},0".format(speed, voice, pitch, tempFilePath, self.hardwareNumber)
+        command = "espeak -s {} -v {} -p {} -f {} --stdout | aplay -D plughw:{},0 > /dev/null 2>&1".format(speed, voice, pitch, tempFilePath, self.hardwareNumber)
         result = os.system(command)
         os.remove(tempFilePath)
         return result
