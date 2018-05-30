@@ -1,6 +1,7 @@
 from multiprocessing import Process, Pipe
 import time
 import logging
+import traceback
 from robotModule import robotModule
 from ChatModule import ChatModule
 from PiHatMotorModule import PiHatMotorModule
@@ -110,8 +111,7 @@ class robotModuleProcess(object):
             self.logger.debug("Received KeyboardInterrupt")
         except Exception as e:
             self.logger.error("Process {} has encountered an error. Forceably shutting down".format(self.__class__.__name__))
-            self.logger.error(e)
-            print(e)
+            self.logger.error(traceback.format_exc())
             
         finally:
             #Clean up
